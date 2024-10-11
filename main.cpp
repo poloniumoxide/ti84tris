@@ -94,24 +94,24 @@ uint24_t held_time[2] = {};
 
 uint8_t held_mino = 8;
 
-bool can_fit_mino_sum(int16_t x, int16_t y) {
+bool can_fit_mino(int16_t x, int16_t y) {
 	if ((x >= 10) | (x < 0)) return false;
 	if ((y >= 40) | (y < 0)) return false;
 
 	return (board[y][x] <= 10);
 }
 
-bool can_fit_tetr(int16_t x, int16_t y, int16_t mino_state) {
+bool can_fit_tetr(int16_t x, int16_t y, int8_t state, int8_t rot) {
 	bool flag = false;
+
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
-			if ((mino_state & (1 << (i*4+j))) != 0) {
-				//check if collision
-				if (!can_fit_mino_sum(x+j, y+i)) {
+			if ((SRS_ROT[state * 4 + rot] & (1 << (i*4+j))) != 0) {
+				//dbg_printf("x:%d y:%d\n", x+j, y+i);
+				if (!can_fit_mino(x+j, y+i)) {
 					flag = true;
 					break;
 				}
-
 			}
 		}
 		if (flag) {
@@ -300,7 +300,7 @@ void cycle_mino() {
 
 void apply_gravity() {
 
-	if (can_fit_tetr(active[0], active[1] + 1, SRS_ROT[active[2]*4+rotation])) {
+	if (can_fit_tetr(active[0], active[1] + 1, active[2], rotation)) {
 		gravity_time++;
 		if (gravity_time >= GRAVITY) {
 			gravity_time -= GRAVITY;
@@ -360,15 +360,13 @@ void rotate_piece(uint8_t dir) {
 		int8_t kickx = SRS_KICK[access][i*2];
 		int8_t kicky = SRS_KICK[access][i*2+1];
 		if (active[2] == 1) {
-			dbg_printf("N");
 			kickx = I_SRS_KICK[access][i*2];
 			kicky = I_SRS_KICK[access][i*2+1];
 		}
 		if (dir == 1) {
 			kickx*=-1; kicky*=-1;
 		}
-		if (can_fit_tetr(active[0] + kickx, active[1] + kicky, SRS_ROT[active[2]*4+r_new])) {
-			dbg_printf("WORK");
+		if (can_fit_tetr(active[0] + kickx, active[1] + kicky, active[2], r_new)) {
 			rotation = r_new;
 			active[0] += kickx;
 			active[1] += kicky;
@@ -376,13 +374,15 @@ void rotate_piece(uint8_t dir) {
 		}
 	}
 
+	return;
+
 }
 
 void draw_shadow(bool erase) {
 
 	int8_t f_dist = 0;
 
-	while (can_fit_tetr(active[0], active[1]+f_dist, SRS_ROT[active[2] * 4 + rotation])) {
+	while (can_fit_tetr(active[0], active[1]+f_dist, active[2], rotation)) {
 		f_dist++;
 	}
 	f_dist--;
@@ -414,7 +414,7 @@ void cycle_shadow() {
 
 	int8_t f_dist = 0;
 
-	while (can_fit_tetr(active[0], active[1]+f_dist, SRS_ROT[active[2] * 4 + rotation])) {
+	while (can_fit_tetr(active[0], active[1]+f_dist, active[2], rotation)) {
 		f_dist++;
 	}
 	f_dist--;
@@ -473,7 +473,7 @@ void take_inputs() {
 		} else if (held_time[0] > DAS) {
 			repeat_times = 100;
 		}
-		while ((repeat_times > 0) & (can_fit_tetr(active[0]-1, active[1], mino_state))) {
+		while ((repeat_times > 0) & (can_fit_tetr(active[0]-1, active[1], active[2], rotation))) {
 			if (!airborne) lockdown_times_remaining--;
 			active[0]--;
 			repeat_times--;
@@ -490,7 +490,7 @@ void take_inputs() {
 		} else if (held_time[1] > DAS) {
 			repeat_times = 100;
 		}
-		while ((repeat_times > 0) & (can_fit_tetr(active[0]+1, active[1], mino_state))) {
+		while ((repeat_times > 0) & (can_fit_tetr(active[0]+1, active[1], active[2], rotation))) {
 			if (!airborne) lockdown_times_remaining--;
 			active[0]++;
 			repeat_times--;
@@ -503,7 +503,7 @@ void take_inputs() {
 	if (((kb_Data[3] & kb_GraphVar) != 0)) {
 		if (!(held&4)) {
 
-			while (can_fit_tetr(active[0], active[1]+1, mino_state)) {
+			while (can_fit_tetr(active[0], active[1]+1, active[2], rotation)) {
 				active[1]++;
 			}
 
@@ -526,7 +526,7 @@ void take_inputs() {
 	} else {
 		held &= ~4;
 	}
-	if ((kb_Data[1] & kb_Mode) != 0) {
+	if ((kb_Data[1] & kb_Del) != 0) {
 		if (!(held&8)) {
 			draw_hold(true);
 			if (held_mino == 8) {
@@ -556,9 +556,21 @@ void take_inputs() {
 		held &= ~8;
 	}
 	if ((kb_Data[1] & kb_2nd) != 0) {
-		while (can_fit_tetr(active[0], active[1]+1, mino_state)) {
+		while (can_fit_tetr(active[0], active[1]+1, active[2], rotation)) {
 			active[1]++;
 		}
+	}
+	if ((kb_Data[1] & kb_Mode) != 0) {
+		if (!(held & 16)) {
+			if (!airborne) lockdown_times_remaining--;
+			if (can_fit_tetr(active[0], active[1], active[2], (rotation+2)%4 )) {
+				rotation+=2; rotation %=4;
+			}
+			held |= 16;
+			redraw_shadow = true;
+		}
+	} else {
+		held &= ~16;
 	}
 
 	if (redraw_shadow) {
@@ -587,7 +599,7 @@ void draw_active() {
 			for (int j = 0; j < 4; j++) {
 				if ((SRS_ROT[active[2] * 4 + rotation] & (1 << (i*4+j))) != 0) {
 					board[active[1] + i][active[0] + j] = active[2] + 1;
-
+					//dbg_printf("x:%d y:%d\n", active[1]+i, active[0]+j);
 				}
 			}
 		}
@@ -627,7 +639,7 @@ int main(void) {
 
 	draw_preview(false);
 
-	gfx_PrintStringXY("v1.0", 10, 10);
+	gfx_PrintStringXY("v1.1", 10, 10);
 
 	while (kb_Data[6] != kb_Enter) {
 
@@ -640,6 +652,8 @@ int main(void) {
 		erase_active();
 
 		// do movements
+
+		//dbg_printf("x %d : y %d : r %d\n", active[0], active[1], active[2]);
 
 		take_inputs();
 
