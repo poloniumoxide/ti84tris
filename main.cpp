@@ -1,9 +1,12 @@
+#include "menu.h"
 #include <ti/getcsc.h>
 #include <sys/util.h>
 #include <graphx.h>
 #include <keypadc.h>
 #include <debug.h>
 #include <time.h>
+#include <ti/real.h>
+
 
 #define max(a,b)            (((a) > (b)) ? (a) : (b))
 #define min(a,b)            (((a) < (b)) ? (a) : (b))
@@ -44,8 +47,8 @@ const int8_t I_SRS_KICK[4][10] = {
 	{0, 0, -2, 0, 1, 0, -2, -1, 1, 2},
 };
 
-const uint8_t mino_colors[8] = {
-	222, 230, 63, 144, 226, 17, 7, 224
+const uint8_t mino_colors[9] = {
+	222, 230, 63, 144, 226, 17, 7, 224, 115
 };
 
 const int8_t offsets[14] = {6, -4, 6, 0, 2, -4, 2, -4, 2, -4, 2, -4, 2, -4};
@@ -64,6 +67,21 @@ const uint16_t attack_table[29] =
 // 8 b2b
 // 9 c1 ... c20
 // 29
+
+// keeps track of the gamestate.
+
+uint8_t gamestate = 0;
+
+// 0 = main menu
+// 1 = practice
+// 2 = 40l
+// 3 = cheese race
+
+clock_t gametime;
+
+uint16_t total_lines = 0;
+
+bool hasd = false;
 
 bool airborne = true;
 
@@ -198,27 +216,54 @@ void update_seven_bag() {
 	}
 }
 
- void clear_lines() {
+ void take_garbage(int str, int col) {
+	for (int i = str; i < 40; i++) {
+		//swap i and i-str
+		for (int j = 0; j < 10; j++) {
+ 			uint8_t temp = board[i][j];
+ 			board[i][j] = board[i-str][j];
+ 			board[i-str][j] = temp;
+ 			if (board[i][j] <=7) board[i][j] = 0;
+ 			if (board[i-str][j] <=7) board[i][j] = 0;
+ 		}
+	}
+	//fill in the rest with garbage
+	for (int i = 0; i < str; i++) {
+		for (int j = 0; j < 10; j ++) {
+			if (j != col) {
+				board[39-i][j] = 18;
+			}
+		}
+	}
+}
+
+
+int clear_lines() {
 
  	uint8_t passed = 39;
 
  	uint8_t cleared = 0;
+ 	uint8_t garbage_cleared = 0;
 
  	for (int i = 39; i > 0; i--) {
  		bool full = true;
  		bool unfull = true;
+ 		bool garbo = false;
  		for (int j = 0; j < 10; j++) {
  			if (board[i][j] <= 10) {
  				full = false;
  			} else {
  				unfull = false;
  			}
+
+ 			if (board[i][j] == 18) garbo = true;
  		}
  		if (full) {
  			for (int j = 0; j < 10; j++) {
  				board[i][j] = 0;
  			}
  			cleared++;
+ 			if (garbo) garbage_cleared++;
  		} else {
  			if (unfull) continue;
  			for (int j = 0; j < 10; j++) {
@@ -230,6 +275,7 @@ void update_seven_bag() {
  		}
   	}
 
+	/*
 	gfx_SetColor(255);
 	gfx_FillRectangle(120, 40, 80, 160);  	
 
@@ -251,6 +297,16 @@ void update_seven_bag() {
 			}
 		}
 	}
+	*/
+
+	if (gamestate == 3) {
+		for (int i = 0; i < garbage_cleared; i++) {
+			take_garbage(1, random() % 10);
+		}
+	}
+
+	total_lines += cleared;
+	return cleared;
 
  }
 
@@ -295,6 +351,13 @@ void cycle_mino() {
 	draw_preview(false);
 
 	clear_lines();
+
+	/*
+	if (gamestate == 3) {
+		for (int i = 0; i < temp; i++) {
+			//take_garbage(1, random() % 10);
+		}
+	}*/
 
 }
 
@@ -378,7 +441,7 @@ void rotate_piece(uint8_t dir) {
 
 }
 
-void draw_shadow(bool erase) {
+void draw_shadow() {
 
 	int8_t f_dist = 0;
 
@@ -390,13 +453,14 @@ void draw_shadow(bool erase) {
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
 			if ((SRS_ROT[active[2] * 4 + rotation] & (1 << (i*4+j))) != 0) {
-				board[active[1] + i + f_dist][active[0] + j] = ((erase) ? 0 : 9);
+				board[active[1] + i + f_dist][active[0] + j] = 9;
 			}
 		}
 	}
 
 }
 
+/*
 void cycle_shadow() {
 
 	gfx_SetColor(255);
@@ -424,7 +488,7 @@ void cycle_shadow() {
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
 			if ((SRS_ROT[active[2] * 4 + rotation] & (1 << (i*4+j))) != 0) {
-				board[active[1] + i + f_dist][active[0] + j] = 0;
+				board[active[1] + i + f_dist][active[0] + j] = 9;
 				gfx_FillRectangle(120+(MINO*(active[0] + j)), 40+(MINO*(active[1] + i + f_dist - 20)), MINO, MINO);
 			}
 		}
@@ -434,8 +498,8 @@ void cycle_shadow() {
 	prev_shadow[1] = active[1] + f_dist;
 	prev_shadow[2] = (active[2] * 4) + rotation;
 
-
 }
+*/
 
 void take_inputs() {
 
@@ -573,9 +637,9 @@ void take_inputs() {
 		held &= ~16;
 	}
 
-	if (redraw_shadow) {
-		cycle_shadow();
-	}
+	//if (redraw_shadow) {
+	//	cycle_shadow();
+	//}
 }
 
 
@@ -599,7 +663,6 @@ void draw_active() {
 			for (int j = 0; j < 4; j++) {
 				if ((SRS_ROT[active[2] * 4 + rotation] & (1 << (i*4+j))) != 0) {
 					board[active[1] + i][active[0] + j] = active[2] + 1;
-					//dbg_printf("x:%d y:%d\n", active[1]+i, active[0]+j);
 				}
 			}
 		}
@@ -609,22 +672,24 @@ void draw_active() {
 
 	for (int i = 20; i < 40; i++) {
 		for (int j = 0; j < 10; j++) {
-			if (((board[i][j] > 0) & (board[i][j] <= 7)) | (board[i][j] > 10) | (board[i][j] == 9)) {
-
-				if (board[i][j] <= 7) {
+			if (true) {
+				if (board[i][j] == 0) {
+					gfx_SetColor(255);
+				} else if (board[i][j] <= 7) {
 					gfx_SetColor(mino_colors[board[i][j]]);
 				} else if (board[i][j] == 9) {
 					gfx_SetColor(mino_colors[0]);
-				} else {
+					board[i][j] = 0;
+				} else if ((board[i][j] > 10) & (board[i][j] < 20)) {
 					gfx_SetColor(mino_colors[board[i][j] - 10]);
+				} else {
+					gfx_SetColor(255);
 				}
 
 				gfx_FillRectangle(120+(MINO*j), 40+(MINO*(i-20)), MINO, MINO);
 			}
 		}
 	}
-
-	gfx_BlitBuffer();
 }
 
 
@@ -639,31 +704,91 @@ int main(void) {
 
 	draw_preview(false);
 
-	gfx_PrintStringXY("v1.1", 10, 10);
-
-	while (kb_Data[6] != kb_Enter) {
+	while (kb_Data[6] != kb_Clear) {
 
 		// start clock
+		kb_Scan();
 
 		clock_t frame_start = clock();
-		
-		// erase the active piece
 
-		erase_active();
+		if (gamestate == 0) {
 
-		// do movements
+			gamestate = run_menu();
 
-		//dbg_printf("x %d : y %d : r %d\n", active[0], active[1], active[2]);
+			if (gamestate != 0) {
+				gametime = clock();
+				gfx_FillScreen(255);
+				initialize_graphics();
+				draw_preview(false);
+				gfx_PrintStringXY("v1.1", 10, 10);
+			}
+			
+			if (gamestate == 3) {
+				for (int i = 0; i < 10; i++) {
+					take_garbage(1, random() % 10);
+				}
+			}
 
-		take_inputs();
+		} else if (gamestate == 2) {
 
-		// draw the active piece
+			// erase the active piece
 
-		//`apply_gravity();
+			erase_active();
 
-		draw_active();
+			// do movements
 
+			// dbg_printf("x %d : y %d : r %d\n", active[0], active[1], active[2]);
 
+			take_inputs();
+
+			// draw the active piece
+
+			//`apply_gravity();
+
+			draw_active();
+
+			gfx_SetColor(255);
+
+			gfx_FillRectangle(10, 20, 50, 60);
+
+			char ls[40];
+			sprintf(ls, "%4.2f", (float)(clock()-gametime)/CLOCKS_PER_SEC);
+			gfx_SetColor(0);
+			gfx_PrintStringXY(ls, 10, 30);
+			sprintf(ls, "%d", 40-total_lines);
+			gfx_PrintStringXY(ls, 10, 50);
+
+			if (total_lines >= 40) {
+				gamestate = 4;
+			}
+			
+		} else if (gamestate == 1) {
+
+			erase_active();
+
+			take_inputs();
+
+			//`apply_gravity();
+
+			draw_active();
+
+		} else if (gamestate == 3) {
+
+			erase_active();
+
+			//if ((clock())%100 == 1) {
+			//	take_garbage(1, random()%10);
+			//}
+
+			take_inputs();
+
+			//`apply_gravity();
+			draw_shadow();
+			draw_active();
+
+		}
+
+		gfx_BlitBuffer();
 		// regulate framerate
 
 		clock_t frame_time = clock() - frame_start;
