@@ -112,6 +112,16 @@ uint24_t held_time[2] = {};
 
 uint8_t held_mino = 8;
 
+bool SHOW_INVIS = false;
+
+// show invisible pieces
+
+void float2str(float value, char *str)
+{
+    real_t tmp_real = os_FloatToReal(value);
+    os_RealToStr(str, &tmp_real, 8, 1, 2);
+}
+
 bool can_fit_mino(int16_t x, int16_t y) {
 	if ((x >= 10) | (x < 0)) return false;
 	if ((y >= 40) | (y < 0)) return false;
@@ -636,6 +646,11 @@ void take_inputs() {
 	} else {
 		held &= ~16;
 	}
+	if ((kb_Data[5] & kb_Vars) != 0) {
+		SHOW_INVIS = true;
+	} else {
+		SHOW_INVIS = false;
+	}
 
 	//if (redraw_shadow) {
 	//	cycle_shadow();
@@ -646,10 +661,9 @@ void take_inputs() {
 void erase_active() {
 	gfx_SetColor(255);
 
-	for (int i = 20; i < 40; i++) {
+	for (int i = 10; i < 40; i++) {
 		for (int j = 0; j < 10; j++) {
 			if ((board[i][j] > 0) & (board[i][j] <= 7)) {
-				gfx_FillRectangle(120+(MINO*(j)), 40+(MINO*(i-20)), MINO, MINO);
 				board[i][j] = 0;
 			}
 		}
@@ -668,23 +682,29 @@ void draw_active() {
 		}
 	}
 
-	gfx_SetColor(0);
+	gfx_SetColor(255);
+
+	gfx_FillRectangle(120, 40, MINO*10, MINO*20);
 
 	for (int i = 20; i < 40; i++) {
 		for (int j = 0; j < 10; j++) {
 			if (true) {
 				if (board[i][j] == 0) {
-					gfx_SetColor(255);
+					continue; //just a blank
 				} else if (board[i][j] <= 7) {
-					gfx_SetColor(mino_colors[board[i][j]]);
+					gfx_SetColor(mino_colors[board[i][j]]); // active piece
 				} else if (board[i][j] == 9) {
-					gfx_SetColor(mino_colors[0]);
+					gfx_SetColor(mino_colors[0]); //shadow piece
 					board[i][j] = 0;
 				} else if ((board[i][j] > 10) & (board[i][j] < 20)) {
-					gfx_SetColor(mino_colors[board[i][j] - 10]);
+					gfx_SetColor(mino_colors[board[i][j] - 10]); // regular piece
+					if ((gamestate == 4) & (!SHOW_INVIS)) {
+						gfx_SetColor(255);
+					}
 				} else {
-					gfx_SetColor(255);
+					continue;
 				}
+
 
 				gfx_FillRectangle(120+(MINO*j), 40+(MINO*(i-20)), MINO, MINO);
 			}
@@ -720,7 +740,7 @@ int main(void) {
 				gfx_FillScreen(255);
 				initialize_graphics();
 				draw_preview(false);
-				gfx_PrintStringXY("v1.1", 10, 10);
+				gfx_PrintStringXY("v1.2", 10, 10);
 			}
 			
 			if (gamestate == 3) {
@@ -731,54 +751,9 @@ int main(void) {
 
 		} else if (gamestate == 2) {
 
-			// erase the active piece
+			//regular practice mode
 
 			erase_active();
-
-			// do movements
-
-			// dbg_printf("x %d : y %d : r %d\n", active[0], active[1], active[2]);
-
-			take_inputs();
-
-			// draw the active piece
-
-			//`apply_gravity();
-
-			draw_active();
-
-			gfx_SetColor(255);
-
-			gfx_FillRectangle(10, 20, 50, 60);
-
-			char ls[40];
-			sprintf(ls, "%4.2f", (float)(clock()-gametime)/CLOCKS_PER_SEC);
-			gfx_SetColor(0);
-			gfx_PrintStringXY(ls, 10, 30);
-			sprintf(ls, "%d", 40-total_lines);
-			gfx_PrintStringXY(ls, 10, 50);
-
-			if (total_lines >= 40) {
-				gamestate = 4;
-			}
-			
-		} else if (gamestate == 1) {
-
-			erase_active();
-
-			take_inputs();
-
-			//`apply_gravity();
-
-			draw_active();
-
-		} else if (gamestate == 3) {
-
-			erase_active();
-
-			//if ((clock())%100 == 1) {
-			//	take_garbage(1, random()%10);
-			//}
 
 			take_inputs();
 
@@ -786,14 +761,77 @@ int main(void) {
 			draw_shadow();
 			draw_active();
 
+			gfx_SetColor(255);
+
+			gfx_FillRectangle(10, 20, 50, 80);
+
+			
+			char ls[40];
+			float2str((float)(clock()-gametime)/CLOCKS_PER_SEC, ls);
+			//sprintf(ls, "%4.2f", (float)(clock()-gametime)/CLOCKS_PER_SEC);
+			gfx_SetColor(0);
+			gfx_PrintStringXY(ls, 10, 30);
+			
+			sprintf(ls, "%d", 40-total_lines);
+			gfx_PrintStringXY(ls, 10, 50);
+
+			if (total_lines >= 40) {
+				gamestate = -1;
+			}
+			
+		} else if (gamestate == 1) {
+
+			// sprint
+
+			erase_active();
+
+
+			take_inputs();
+			gfx_SetColor(255);
+
+			gfx_FillRectangle(10, 20, 50, 80);
+
+			draw_shadow();
+			draw_active();
+
+		} else if (gamestate == 3) {
+
+			// cheese practice
+
+			erase_active();
+
+			take_inputs();
+			gfx_SetColor(255);
+
+			gfx_FillRectangle(10, 20, 50, 80);
+
+			//`apply_gravity();
+			draw_shadow();
+			draw_active();
+
+		} else if (gamestate == 4) {
+
+			erase_active();
+
+			take_inputs();
+			gfx_SetColor(255);
+
+			gfx_FillRectangle(10, 20, 50, 80);
+
+			draw_shadow();
+			draw_active();
+
 		}
-
-		gfx_BlitBuffer();
 		// regulate framerate
-
+		char ps[10];
 		clock_t frame_time = clock() - frame_start;
-
-		while (frame_time < CLOCKS_PER_SEC/30) {
+		float2str((float)CLOCKS_PER_SEC/(frame_time), ps);
+		//sprintf(ps, "%4.2f", (float)CLOCKS_PER_SEC/(frame_time));
+		gfx_SetColor(255);
+		gfx_SetColor(0);
+		gfx_PrintStringXY(ps, 10, 70);
+		gfx_BlitBuffer();
+		while (frame_time < CLOCKS_PER_SEC/60) {
 			frame_time = clock() - frame_start;
         }
 

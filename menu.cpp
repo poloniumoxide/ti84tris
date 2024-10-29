@@ -13,6 +13,7 @@ int run_menu() {
 	gfx_PrintStringXY("1 -> Practice", 100, 120);
 	gfx_PrintStringXY("2 -> 40L", 100, 140);
 	gfx_PrintStringXY("3 -> Cheese Practice", 100, 160);
+	gfx_PrintStringXY("4 -> Invisible", 100, 180);
 
 	kb_Scan();
 
@@ -24,6 +25,9 @@ int run_menu() {
 	}
 	if (kb_Data[5] & kb_3) {
 		return 3;
+	}
+	if (kb_Data[3] & kb_4) {
+		return 4;
 	}
 
 	return 0;
